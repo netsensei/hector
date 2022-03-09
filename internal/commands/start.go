@@ -5,9 +5,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
 
@@ -52,26 +55,31 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				os.Exit(1)
 			}
 
+			rendered, _ := glamour.Render(string(content), "dark")
+
 			a.ActiveTab++
 			tab := Tab{
 				URL:     "https://cucumber.com",
 				Status:  "Done.",
-				Content: string(content),
+				Content: rendered,
 			}
 
 			a.Tabs = append(a.Tabs, tab)
 			a.viewport.SetContent(tab.Content)
 		}
 	case tea.WindowSizeMsg:
+		footerHeight := lipgloss.Height(a.FooterView(&a.Tabs[a.ActiveTab]))
+		verticalMarginHeight := footerHeight
+
 		if !a.ready {
-			a.viewport = viewport.New(msg.Width, msg.Height)
+			a.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			a.viewport.YPosition = 0
 			a.viewport.HighPerformanceRendering = useHighPerformanceRenderer
 			a.viewport.SetContent(a.Tabs[a.ActiveTab].Content)
 			a.ready = true
 		} else {
 			a.viewport.Width = msg.Width
-			a.viewport.Height = msg.Height
+			a.viewport.Height = msg.Height - verticalMarginHeight
 		}
 	}
 
@@ -86,7 +94,24 @@ func (a App) View() string {
 	if !a.ready {
 		return "\n  Initializing..."
 	}
-	return a.viewport.View()
+
+	return fmt.Sprintf("%s\n%s",
+		a.viewport.View(),
+		a.FooterView(&a.Tabs[a.ActiveTab]),
+	)
+}
+
+func (a App) FooterView(tab *Tab) string {
+	info := tab.URL
+	line := strings.Repeat("─", max(0, a.viewport.Width-lipgloss.Width(info)))
+	return lipgloss.JoinHorizontal(lipgloss.Center, info, line)
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func boot(cmd *cobra.Command, args []string) {
@@ -96,12 +121,15 @@ func boot(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	// Replace with a custom renderer for gophertext / gemtext
+	rendered, _ := glamour.Render(string(content), "dark")
+
 	tabs := []Tab{}
 
 	tab := Tab{
 		URL:     "http://artichoke.com",
 		Status:  "Done.",
-		Content: string(content),
+		Content: rendered,
 	}
 
 	tabs = append(tabs, tab)
