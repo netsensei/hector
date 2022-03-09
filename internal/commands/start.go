@@ -102,9 +102,15 @@ func (a App) View() string {
 }
 
 func (a App) FooterView(tab *Tab) string {
-	info := tab.URL
-	line := strings.Repeat("─", max(0, a.viewport.Width-lipgloss.Width(info)))
-	return lipgloss.JoinHorizontal(lipgloss.Center, info, line)
+	var statusStyle = lipgloss.NewStyle().Background(lipgloss.Color("205")).PaddingRight(2).PaddingLeft(2)
+	var urlStyle = lipgloss.NewStyle().Background(lipgloss.Color("237")).PaddingLeft(2)
+
+	url := tab.URL + strings.Repeat(" ", max(0, a.viewport.Width-lipgloss.Width(tab.URL)))
+
+	status := statusStyle.Render(tab.Status)
+	url = urlStyle.Render(url)
+
+	return lipgloss.JoinHorizontal(lipgloss.Center, status, url)
 }
 
 func max(a, b int) int {
