@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/netsensei/hector/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -21,16 +22,10 @@ func init() {
 }
 
 type App struct {
-	Tabs      []Tab
+	Tabs      *ui.Tabs
 	ActiveTab int
 	viewport  viewport.Model
 	ready     bool
-}
-
-type Tab struct {
-	URL     string
-	Status  string
-	Content string
 }
 
 func (a App) Init() tea.Cmd {
@@ -58,24 +53,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rendered, _ := glamour.Render(string(content), "dark")
 
 			a.ActiveTab++
-			tab := Tab{
+			tab := ui.Tab{
 				URL:     "https://cucumber.com",
 				Status:  "Done.",
 				Content: rendered,
 			}
 
-			a.Tabs = append(a.Tabs, tab)
-			a.viewport.SetContent(tab.Content)
+			a.Tabs.Add(tab)
+		}
+
+		if k := msg.String(); k == "ctrl+x" {
+			a.Tabs.Remove()
 		}
 	case tea.WindowSizeMsg:
-		footerHeight := lipgloss.Height(a.FooterView(&a.Tabs[a.ActiveTab]))
+		footerHeight := lipgloss.Height(a.FooterView(a.Tabs.Current()))
 		verticalMarginHeight := footerHeight
 
 		if !a.ready {
 			a.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			a.viewport.YPosition = 0
 			a.viewport.HighPerformanceRendering = useHighPerformanceRenderer
-			a.viewport.SetContent(a.Tabs[a.ActiveTab].Content)
 			a.ready = true
 		} else {
 			a.viewport.Width = msg.Width
@@ -95,22 +92,32 @@ func (a App) View() string {
 		return "\n  Initializing..."
 	}
 
+	tab, activeTab := a.Tabs.Current()
+
 	return fmt.Sprintf("%s\n%s",
-		a.viewport.View(),
-		a.FooterView(&a.Tabs[a.ActiveTab]),
+		a.CanvasView(tab),
+		a.FooterView(tab, activeTab),
 	)
 }
 
-func (a App) FooterView(tab *Tab) string {
+func (a App) CanvasView(tab *ui.Tab) string {
+	a.viewport.SetContent(tab.Content)
+	return a.viewport.View()
+}
+
+func (a App) FooterView(tab *ui.Tab, activeTab int) string {
 	var statusStyle = lipgloss.NewStyle().Background(lipgloss.Color("205")).PaddingRight(2).PaddingLeft(2)
+	var tabStyle = lipgloss.NewStyle().Background(lipgloss.Color("205")).PaddingRight(2).PaddingLeft(2)
 	var urlStyle = lipgloss.NewStyle().Background(lipgloss.Color("237")).PaddingLeft(2)
 
-	url := tab.URL + strings.Repeat(" ", max(0, a.viewport.Width-lipgloss.Width(tab.URL)))
+	tabIndicatorStr := fmt.Sprintf("tab %d", activeTab)
+	url := tab.URL + strings.Repeat(" ", max(0, a.viewport.Width-lipgloss.Width(tab.URL)-lipgloss.Width(tabIndicatorStr)))
 
 	status := statusStyle.Render(tab.Status)
+	tabIndicator := tabStyle.Render(tabIndicatorStr)
 	url = urlStyle.Render(url)
 
-	return lipgloss.JoinHorizontal(lipgloss.Center, status, url)
+	return lipgloss.JoinHorizontal(lipgloss.Center, status, tabIndicator, url)
 }
 
 func max(a, b int) int {
@@ -130,15 +137,15 @@ func boot(cmd *cobra.Command, args []string) {
 	// Replace with a custom renderer for gophertext / gemtext
 	rendered, _ := glamour.Render(string(content), "dark")
 
-	tabs := []Tab{}
+	tabs := ui.NewTabs()
 
-	tab := Tab{
+	tab := ui.Tab{
 		URL:     "http://artichoke.com",
 		Status:  "Done.",
 		Content: rendered,
 	}
 
-	tabs = append(tabs, tab)
+	tabs.Add(tab)
 
 	app := App{
 		Tabs:      tabs,
