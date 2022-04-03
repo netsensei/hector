@@ -17,6 +17,12 @@ import (
 
 const useHighPerformanceRenderer = false
 
+const INIT = "initializing"
+const EXIT = "exiting"
+const READY = "read"
+const CMND = "command"
+const INPT = "input"
+
 func init() {
 	rootCmd.AddCommand(startCmd)
 }
@@ -25,7 +31,7 @@ type App struct {
 	Tabs      *ui.Tabs
 	ActiveTab int
 	viewport  viewport.Model
-	ready     bool
+	state     string
 }
 
 func (a App) Init() tea.Cmd {
@@ -40,6 +46,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if k := msg.String(); k == "ctrl+c" || k == "q" || k == "esc" {
+			a.state = EXIT
 			return a, tea.Quit
 		}
 
@@ -65,15 +72,23 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if k := msg.String(); k == "ctrl+x" {
 			a.Tabs.Remove()
 		}
+
+		if k := msg.String(); k == "ctrl+p" {
+			a.Tabs.Down()
+		}
+
+		if k := msg.String(); k == "ctrl+n" {
+			a.Tabs.Up()
+		}
 	case tea.WindowSizeMsg:
-		footerHeight := lipgloss.Height(a.FooterView(a.Tabs.Current()))
+		footerHeight := lipgloss.Height(a.FooterView())
 		verticalMarginHeight := footerHeight
 
-		if !a.ready {
+		if a.state != READY {
 			a.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			a.viewport.YPosition = 0
 			a.viewport.HighPerformanceRendering = useHighPerformanceRenderer
-			a.ready = true
+			a.state = READY
 		} else {
 			a.viewport.Width = msg.Width
 			a.viewport.Height = msg.Height - verticalMarginHeight
@@ -88,29 +103,44 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) View() string {
-	if !a.ready {
+	if a.state != READY && a.state == INIT {
 		return "\n  Initializing..."
 	}
 
-	tab, activeTab := a.Tabs.Current()
-
 	return fmt.Sprintf("%s\n%s",
-		a.CanvasView(tab),
-		a.FooterView(tab, activeTab),
+		a.CanvasView(),
+		a.FooterView(),
 	)
 }
 
-func (a App) CanvasView(tab *ui.Tab) string {
+func (a App) CanvasView() string {
+	tab, _ := a.Tabs.Current()
 	a.viewport.SetContent(tab.Content)
 	return a.viewport.View()
 }
 
-func (a App) FooterView(tab *ui.Tab, activeTab int) string {
+func (a App) FooterView() string {
+	tab, activeTab := a.Tabs.Current()
+	count := a.Tabs.Count()
+
 	var statusStyle = lipgloss.NewStyle().Background(lipgloss.Color("205")).PaddingRight(2).PaddingLeft(2)
 	var tabStyle = lipgloss.NewStyle().Background(lipgloss.Color("205")).PaddingRight(2).PaddingLeft(2)
 	var urlStyle = lipgloss.NewStyle().Background(lipgloss.Color("237")).PaddingLeft(2)
 
-	tabIndicatorStr := fmt.Sprintf("tab %d", activeTab)
+	var tabIndicatorStr string
+
+	if count == 1 {
+		tabIndicatorStr = fmt.Sprintf("tab %d", activeTab)
+	} else {
+		if activeTab == 0 {
+			tabIndicatorStr = fmt.Sprintf("tab %d \u00BB", activeTab)
+		} else if activeTab > 0 && activeTab < count-1 {
+			tabIndicatorStr = fmt.Sprintf("\u00AB tab %d \u00BB", activeTab)
+		} else {
+			tabIndicatorStr = fmt.Sprintf("\u00AB tab %d", activeTab)
+		}
+	}
+
 	url := tab.URL + strings.Repeat(" ", max(0, a.viewport.Width-lipgloss.Width(tab.URL)-lipgloss.Width(tabIndicatorStr)))
 
 	status := statusStyle.Render(tab.Status)
@@ -150,6 +180,7 @@ func boot(cmd *cobra.Command, args []string) {
 	app := App{
 		Tabs:      tabs,
 		ActiveTab: 0,
+		state:     INIT,
 	}
 
 	errs := make(chan error, 1)

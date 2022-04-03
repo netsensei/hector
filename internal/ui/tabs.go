@@ -34,8 +34,10 @@ func (ts *Tabs) Add(tab Tab) {
 }
 
 func (ts *Tabs) Remove() {
-	ts.Tabs = append(ts.Tabs[:ts.ActiveTab], ts.Tabs[ts.ActiveTab+1:]...)
-	ts.ActiveTab--
+	if len(ts.Tabs) > 1 {
+		ts.Tabs = append(ts.Tabs[:ts.ActiveTab], ts.Tabs[ts.ActiveTab+1:]...)
+		ts.ActiveTab--
+	}
 }
 
 func (ts *Tabs) Up() {
@@ -53,4 +55,8 @@ func (ts *Tabs) Down() {
 
 func (ts *Tabs) Current() (*Tab, int) {
 	return &ts.Tabs[ts.ActiveTab], ts.ActiveTab
+}
+
+func (ts *Tabs) Count() int {
+	return len(ts.Tabs)
 }
