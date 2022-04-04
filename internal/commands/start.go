@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -19,9 +19,10 @@ const useHighPerformanceRenderer = false
 
 const INIT = "initializing"
 const EXIT = "exiting"
-const READY = "read"
+const READY = "ready"
 const CMND = "command"
-const INPT = "input"
+const INPUT = "input"
+const VIEW = "view"
 
 func init() {
 	rootCmd.AddCommand(startCmd)
@@ -31,6 +32,7 @@ type App struct {
 	Tabs      *ui.Tabs
 	ActiveTab int
 	viewport  viewport.Model
+	navInput  textinput.Model
 	state     string
 }
 
@@ -45,7 +47,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if k := msg.String(); k == "ctrl+c" || k == "q" || k == "esc" {
+		if k := msg.String(); k == "ctrl+c" || k == "esc" {
 			a.state = EXIT
 			return a, tea.Quit
 		}
@@ -80,6 +82,31 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if k := msg.String(); k == "ctrl+n" {
 			a.Tabs.Up()
 		}
+
+		if k := msg.String(); k == "ctrl+u" {
+			a.state = INPUT
+			a.navInput.Focus()
+		}
+
+		if k := msg.String(); k == "ctrl+v" {
+			a.state = VIEW
+		}
+
+		if a.state == INPUT {
+			if k := msg.String(); k == "enter" {
+				tab, _ := a.Tabs.Current()
+
+				fileName := a.navInput.Value()
+				content, err := ioutil.ReadFile(fileName)
+				if err != nil {
+					tab.Content = fmt.Sprintf("could not load file: %s", fileName)
+				} else {
+					rendered, _ := glamour.Render(string(content), "dark")
+					tab.Content = rendered
+				}
+			}
+		}
+
 	case tea.WindowSizeMsg:
 		footerHeight := lipgloss.Height(a.FooterView())
 		verticalMarginHeight := footerHeight
@@ -96,7 +123,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle keyboard and mouse events in the viewport
-	a.viewport, cmd = a.viewport.Update(msg)
+	if a.state == INPUT {
+		a.navInput, cmd = a.navInput.Update(msg)
+	} else {
+		a.viewport, cmd = a.viewport.Update(msg)
+	}
+
 	cmds = append(cmds, cmd)
 
 	return a, tea.Batch(cmds...)
@@ -141,7 +173,14 @@ func (a App) FooterView() string {
 		}
 	}
 
-	url := tab.URL + strings.Repeat(" ", max(0, a.viewport.Width-lipgloss.Width(tab.URL)-lipgloss.Width(tabIndicatorStr)))
+	if a.state == INPUT {
+		a.navInput.Focus()
+	} else {
+		a.navInput.Reset()
+	}
+
+	navInput := a.navInput.View()
+	url := navInput // + strings.Repeat(" ", max(0, a.viewport.Width-lipgloss.Width(navInput)-lipgloss.Width(tabIndicatorStr)))
 
 	status := statusStyle.Render(tab.Status)
 	tabIndicator := tabStyle.Render(tabIndicatorStr)
@@ -169,18 +208,26 @@ func boot(cmd *cobra.Command, args []string) {
 
 	tabs := ui.NewTabs()
 
+	url := "http://artichoke.com"
+
 	tab := ui.Tab{
-		URL:     "http://artichoke.com",
+		URL:     url,
 		Status:  "Done.",
 		Content: rendered,
 	}
 
 	tabs.Add(tab)
 
+	navInput := textinput.New()
+	navInput.Placeholder = url
+	navInput.CharLimit = 510
+	navInput.Width = 255
+
 	app := App{
 		Tabs:      tabs,
 		ActiveTab: 0,
 		state:     INIT,
+		navInput:  navInput,
 	}
 
 	errs := make(chan error, 1)
