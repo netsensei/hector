@@ -177,7 +177,7 @@ func (a App) FooterView() string {
 	if a.state == INPUT {
 		a.navInput.Focus()
 	} else {
-		a.navInput.Reset()
+		a.navInput.Blur()
 	}
 
 	navInput := a.navInput.View()
