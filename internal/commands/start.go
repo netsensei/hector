@@ -122,6 +122,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	tab, _ := a.Tabs.Current()
+	a.viewport.SetContent(tab.Content)
+
 	// Handle keyboard and mouse events in the viewport
 	if a.state == INPUT {
 		a.navInput, cmd = a.navInput.Update(msg)
@@ -146,8 +149,6 @@ func (a App) View() string {
 }
 
 func (a App) CanvasView() string {
-	tab, _ := a.Tabs.Current()
-	a.viewport.SetContent(tab.Content)
 	return a.viewport.View()
 }
 
