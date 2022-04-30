@@ -20,7 +20,6 @@ const useHighPerformanceRenderer = false
 const INIT = "initializing"
 const EXIT = "exiting"
 const READY = "ready"
-const CMND = "command"
 const INPUT = "input"
 const VIEW = "view"
 
@@ -29,11 +28,10 @@ func init() {
 }
 
 type App struct {
-	Tabs      *ui.Tabs
-	ActiveTab int
-	viewport  viewport.Model
-	navInput  textinput.Model
-	state     string
+	Tabs     *ui.Tabs
+	viewport viewport.Model
+	navInput textinput.Model
+	state    string
 }
 
 func (a App) Init() tea.Cmd {
@@ -61,7 +59,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			rendered, _ := glamour.Render(string(content), "dark")
 
-			a.ActiveTab++
 			tab := ui.Tab{
 				URL:     "https://cucumber.com",
 				Status:  "Done.",
@@ -84,12 +81,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if k := msg.String(); k == "ctrl+u" {
-			a.state = INPUT
-			a.navInput.Focus()
-		}
-
-		if k := msg.String(); k == "ctrl+v" {
-			a.state = VIEW
+			if a.state != INPUT {
+				a.state = INPUT
+				a.navInput.Focus()
+			} else {
+				a.state = VIEW
+			}
 		}
 
 		if a.state == INPUT {
@@ -97,6 +94,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				tab, _ := a.Tabs.Current()
 
 				fileName := a.navInput.Value()
+				tab.URL = fileName
 				content, err := ioutil.ReadFile(fileName)
 				if err != nil {
 					tab.Content = fmt.Sprintf("could not load file: %s", fileName)
@@ -104,6 +102,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					rendered, _ := glamour.Render(string(content), "dark")
 					tab.Content = rendered
 				}
+
+				a.Tabs.Update(*tab)
 			}
 		}
 
@@ -112,6 +112,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		verticalMarginHeight := footerHeight
 
 		if a.state != READY {
+			navInput := textinput.New()
+			navInput.CharLimit = 510
+			navInput.Width = 255
+			a.navInput = navInput
+
 			a.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			a.viewport.YPosition = 0
 			a.viewport.HighPerformanceRendering = useHighPerformanceRenderer
@@ -129,6 +134,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if a.state == INPUT {
 		a.navInput, cmd = a.navInput.Update(msg)
 	} else {
+		a.navInput.SetValue(tab.URL)
 		a.viewport, cmd = a.viewport.Update(msg)
 	}
 
@@ -219,16 +225,9 @@ func boot(cmd *cobra.Command, args []string) {
 
 	tabs.Add(tab)
 
-	navInput := textinput.New()
-	navInput.Placeholder = url
-	navInput.CharLimit = 510
-	navInput.Width = 255
-
 	app := App{
-		Tabs:      tabs,
-		ActiveTab: 0,
-		state:     INIT,
-		navInput:  navInput,
+		Tabs:  tabs,
+		state: INIT,
 	}
 
 	errs := make(chan error, 1)

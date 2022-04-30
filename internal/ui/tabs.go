@@ -4,6 +4,8 @@ type Tab struct {
 	URL     string
 	Status  string
 	Content string
+	// History History
+	// State string
 }
 
 type Tabs struct {
@@ -55,6 +57,10 @@ func (ts *Tabs) Down() {
 
 func (ts *Tabs) Current() (*Tab, int) {
 	return &ts.Tabs[ts.ActiveTab], ts.ActiveTab
+}
+
+func (ts *Tabs) Update(tab Tab) {
+	ts.Tabs[ts.ActiveTab] = tab
 }
 
 func (ts *Tabs) Count() int {
